@@ -4,7 +4,7 @@ import { shapeTranscript, toPromptText } from '../../lib/transcript.ts';
 import { bad, readJson, upstreamError } from '../../server/http.ts';
 import { openai, TEXT_MAX_ANSWERS, TEXT_MODEL } from '../../server/openai.ts';
 import { textInstructions } from '../../server/prompts.ts';
-import { check, tooMany } from '../../server/ratelimit.ts';
+import { budgetSpent, check, sessionBudget, tooMany } from '../../server/ratelimit.ts';
 import { NextTurnSchema, TranscriptIn } from '../../server/schemas.ts';
 
 export const maxDuration = 30;
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
   // A fresh text interview counts as a session, same budget as voice.
   const gate = answers === 0 ? check(req, 'session') : check(req, 'turn');
   if (!gate.ok) return tooMany(gate.retryAfter, answers === 0 ? 'three interview sessions' : 'forty answers');
+  if (answers === 0 && !sessionBudget.take()) return budgetSpent();
 
   const isLast = answers >= TEXT_MAX_ANSWERS;
   try {

@@ -6,7 +6,6 @@ import { applyRealtimeEvent, type Turn } from './transcript.ts';
 
 export type VoiceStatus = 'idle' | 'mic' | 'connecting' | 'live' | 'ended' | 'error';
 
-const CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
 const WRAP_UP_AT = 30;
 
 function rms(analyser: AnalyserNode | null, buf: Uint8Array<ArrayBuffer>, gain: number) {
@@ -108,16 +107,6 @@ export function useVoiceSession(onEnded?: (turns: Turn[]) => void) {
 
       setStatus('connecting');
       try {
-        const res = await fetch('/api/session', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ setup }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? 'Could not start a session.');
-        const capSeconds: number = data.capSeconds ?? 360;
-        setCap(capSeconds);
-
         const pc = new RTCPeerConnection();
         pcRef.current = pc;
         const audio = new Audio();
@@ -161,13 +150,17 @@ export function useVoiceSession(onEnded?: (turns: Turn[]) => void) {
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        const sdpRes = await fetch(CALLS_URL, {
+        // The server opens the call and schedules its hangup; only the SDP answer comes back.
+        const res = await fetch('/api/session', {
           method: 'POST',
-          body: offer.sdp,
-          headers: { Authorization: `Bearer ${data.clientSecret}`, 'Content-Type': 'application/sdp' },
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ setup, sdp: offer.sdp }),
         });
-        if (!sdpRes.ok) throw new Error('The voice service refused the connection. Try again in a moment.');
-        await pc.setRemoteDescription({ type: 'answer', sdp: await sdpRes.text() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || typeof data.sdp !== 'string') throw new Error(data.error ?? 'Could not start a session.');
+        const capSeconds: number = data.capSeconds ?? 360;
+        setCap(capSeconds);
+        await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
 
         const deadline = Date.now() + capSeconds * 1000;
         setRemaining(capSeconds);
