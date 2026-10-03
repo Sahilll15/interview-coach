@@ -63,6 +63,7 @@ function Hero() {
         Mock interviews, out loud
       </span>
       <h1 className="mt-5 max-w-2xl font-serif text-5xl leading-[1.02] tracking-tight sm:text-7xl">
+        <span className="sr-only">Interview Coach, AI mock interview practice: </span>
         Practice the interview <em className="text-violet-deep">before</em> it counts
       </h1>
       <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-soft sm:text-lg">
