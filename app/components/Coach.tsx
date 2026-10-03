@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import Orb from './Orb';
 import ReportView, { type ReportMeta } from './ReportView';
@@ -58,17 +59,22 @@ function Hero() {
           </span>
         ))}
       </div>
-      <span className="glass mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium sm:text-sm">
-        <span className="size-1.5 rounded-full bg-violet" />
-        Mock interviews, out loud
-      </span>
-      <h1 className="mt-5 max-w-2xl font-serif text-5xl leading-[1.02] tracking-tight sm:text-7xl">
-        <span className="sr-only">Interview Coach, AI mock interview practice: </span>
-        Practice the interview <em className="text-violet-deep">before</em> it counts
+      <h1 className="mt-2 flex flex-col items-center">
+        <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 font-sans text-xs font-medium sm:text-sm">
+          <span aria-hidden="true" className="size-1.5 rounded-full bg-violet" />
+          Interview Coach, AI mock interview practice
+          <span className="sr-only">: </span>
+        </span>
+        <span className="mt-5 block max-w-2xl font-serif text-5xl leading-[1.02] tracking-tight sm:text-7xl">
+          Practice the interview <em className="text-violet-deep">before</em> it counts
+        </span>
       </h1>
       <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-soft sm:text-lg">
         Paste a job description and talk to an interviewer for about four and a half minutes. You get a report that scores every answer and quotes your own words back to you.
       </p>
+      <Link href="/how-it-works" className="mt-3 text-sm font-medium text-violet-deep underline decoration-violet/30 underline-offset-4 hover:decoration-violet">
+        How scoring works, limits and privacy
+      </Link>
     </section>
   );
 }
@@ -92,7 +98,10 @@ function HowItWorks() {
         ))}
       </div>
       <p className="mx-auto mt-6 max-w-xl text-center text-sm text-ink-faint">
-        No account. Nothing is stored on the server. Audio goes straight from your browser to OpenAI.
+        No account. Nothing is stored on the server. Audio goes straight from your browser to OpenAI.{' '}
+        <Link href="/how-it-works" className="font-medium text-violet-deep underline decoration-violet/30 underline-offset-4 hover:decoration-violet">
+          Read the details
+        </Link>
       </p>
     </section>
   );
