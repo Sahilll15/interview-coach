@@ -27,9 +27,12 @@ export async function POST(req: Request) {
   if (answers > TEXT_MAX_ANSWERS) return bad('This interview is over. Generate your report.');
 
   // A fresh text interview counts as a session, same budget as voice.
-  const gate = answers === 0 ? check(req, 'session') : check(req, 'turn');
-  if (!gate.ok) return tooMany(gate.retryAfter, answers === 0 ? 'three interview sessions' : 'forty answers');
-  if (answers === 0 && !sessionBudget.take()) return budgetSpent();
+  const gate = await check(req, answers === 0 ? 'session' : 'turn');
+  if (!gate.ok) return tooMany(gate, answers === 0 ? 'three interview sessions' : 'forty answers');
+  if (answers === 0) {
+    const spend = await sessionBudget.take();
+    if (!spend.ok) return budgetSpent(spend);
+  }
 
   const isLast = answers >= TEXT_MAX_ANSWERS;
   try {

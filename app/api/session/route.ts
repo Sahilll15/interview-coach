@@ -29,9 +29,10 @@ export async function POST(req: Request) {
     return bad('Missing or invalid WebRTC offer.');
   }
 
-  const gate = check(req, 'session');
-  if (!gate.ok) return tooMany(gate.retryAfter, 'three interview sessions');
-  if (!sessionBudget.take()) return budgetSpent();
+  const gate = await check(req, 'session');
+  if (!gate.ok) return tooMany(gate, 'three interview sessions');
+  const spend = await sessionBudget.take();
+  if (!spend.ok) return budgetSpent(spend);
   sweepOverdue();
 
   try {

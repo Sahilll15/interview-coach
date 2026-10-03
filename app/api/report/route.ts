@@ -27,8 +27,8 @@ export async function POST(req: Request) {
     return bad('Not enough answers to score yet. Answer at least one question first.');
   }
 
-  const gate = check(req, 'report');
-  if (!gate.ok) return tooMany(gate.retryAfter, 'five reports');
+  const gate = await check(req, 'report');
+  if (!gate.ok) return tooMany(gate, 'five reports');
 
   const { setup } = parsed;
   try {

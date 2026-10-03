@@ -35,7 +35,7 @@ What this does and does not cover:
 
 **Text mode.** `POST /api/interviewer` takes the transcript so far and returns the next interviewer message as structured output. It caps at six answers and uses the same report route.
 
-**Abuse and cost controls.** Per IP limits in memory: 3 sessions per hour (voice and text share it), 40 text answers per hour, 5 reports per hour. On top of that, each instance allows `DAILY_SESSION_BUDGET` sessions per UTC day (30 by default) and returns 503 once they are used. The IP comes from `x-real-ip`, then the last `x-forwarded-for` hop, because the leftmost entry is whatever the client sent. Addresses are normalized and IPv6 is grouped by /64, so rotating through one subscriber's addresses or adding a port does not give a fresh limit. The key store is capped at 10,000 entries and evicts the least recently used keys instead of clearing everyone, so flooding it with new keys does not reset other counters. Malformed limit env vars fall back to the defaults instead of turning the limit off. Input is validated before it counts against a limit. Bodies are read as a stream with a hard byte cap and the read stops as soon as it is exceeded, whether `content-length` is missing, wrong or chunked (413). The SDK retries twice with a 60 second timeout. Upstream errors return a short message and never leak details.
+**Abuse and cost controls.** Per IP limits: 3 sessions per hour (voice and text share it), 40 text answers per hour, 5 reports per hour. The window starts at your first counted request and the 429 response says when it resets. On top of that, the whole deployment allows `DAILY_SESSION_BUDGET` sessions per UTC day (30 by default) and returns 503 once they are used. Counts are global across instances because they live in a shared Upstash Redis database. Each check is one Lua script that increments and sets the expiry atomically, and a request over the limit is refused without being counted. If Redis is configured but cannot be reached, the paid routes return 503 instead of letting the request through. Without the Redis env vars (local dev, tests) the app falls back to counting in memory. The IP comes from `x-real-ip`, then the last `x-forwarded-for` hop, because the leftmost entry is whatever the client sent. Addresses are normalized and IPv6 is grouped by /64, so rotating through one subscriber's addresses or adding a port does not give a fresh limit. The in-memory fallback is capped at 10,000 keys and evicts the least recently used ones instead of clearing everyone. Malformed limit env vars fall back to the defaults instead of turning the limit off. Input is validated before it counts against a limit. Bodies are read as a stream with a hard byte cap and the read stops as soon as it is exceeded, whether `content-length` is missing, wrong or chunked (413). The SDK retries twice with a 60 second timeout. Upstream errors return a short message and never leak details.
 
 ### Cost per run
 
@@ -66,12 +66,12 @@ An 18 second recording of the sample report flow is in [docs/demo.mp4](docs/demo
 
 ```bash
 npm install
-cp .env.example .env.local   # add OPENAI_API_KEY
+cp .env.example .env.local   # add OPENAI_API_KEY (or vercel env pull .env.local)
 npm run dev                  # http://localhost:3201
 ```
 
 ```bash
-npm test        # transcript shaping, report scoring, body cap and rate limiter
+npm test        # transcript shaping, report scoring, body cap, rate limiter and Redis counters
 npm run lint
 npm run build && npm start
 ```
@@ -86,13 +86,14 @@ npm run build && npm start
 | `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Live transcription of your answers |
 | `OPENAI_VOICE` | `marin` | Interviewer voice |
 | `SESSION_SECONDS` | `360` | Voice session cap, clamped to 60 to 390 so the server hangup fits in `maxDuration` |
-| `DAILY_SESSION_BUDGET` | `30` | Voice and text sessions per instance per UTC day, 503 after that |
+| `DAILY_SESSION_BUDGET` | `30` | Voice and text sessions per UTC day across the whole deployment, 503 after that |
 | `RATE_LIMIT_SESSIONS` | `3` | Sessions per IP per window |
 | `RATE_LIMIT_TURNS` | `40` | Text answers per IP per window |
 | `RATE_LIMIT_REPORTS` | `5` | Reports per IP per window |
-| `RATE_LIMIT_WINDOW_MS` | `3600000` | Rate limit window |
+| `RATE_LIMIT_WINDOW_MS` | `3600000` | Rate limit window, started by the first counted request |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | none | Upstash Redis REST credentials for the shared counters. Set by the Vercel integration; without them counts stay in memory |
 
-The rate limiter and the daily budget are in memory, so on serverless each instance keeps its own counts and a busy deployment with several instances allows that many times the budget. The IP key is only as trustworthy as the proxy in front of the app. Vercel overwrites `x-real-ip`; behind a proxy that passes client headers through, a caller can pick their own key. Swap in a shared store before relying on it in front of real traffic.
+Rate limits and the daily budget are counted in Upstash Redis, so they hold across every serverless instance. Keys look like `rl:interview-coach:session:<ip>` and `budget:interview-coach:sessions:<YYYY-MM-DD>`, the budget key expiring after two days. The forced hangup is different: the list of calls still to hang up lives in the memory of the instance that opened them, so it stays best effort. The IP key is only as trustworthy as the proxy in front of the app. Vercel overwrites `x-real-ip`; behind a proxy that passes client headers through, a caller can pick their own key.
 
 ## Related
 
