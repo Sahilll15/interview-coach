@@ -13,8 +13,8 @@ import {
 import { voiceInstructions } from '../../server/prompts.ts';
 import { budgetSpent, check, sessionBudget, tooMany } from '../../server/ratelimit.ts';
 
-// The function stays alive after responding so it can hang the call up. Needs a plan that allows 420s.
-export const maxDuration = 420;
+// The function stays alive after responding so it can hang the call up. 300s is the Vercel Hobby limit.
+export const maxDuration = 300;
 
 const MAX_SDP = 20_000;
 

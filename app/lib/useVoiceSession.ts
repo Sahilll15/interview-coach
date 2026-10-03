@@ -24,7 +24,7 @@ export function useVoiceSession(onEnded?: (turns: Turn[]) => void) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [cap, setCap] = useState<number>(360);
+  const [cap, setCap] = useState<number>(270);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -158,7 +158,7 @@ export function useVoiceSession(onEnded?: (turns: Turn[]) => void) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || typeof data.sdp !== 'string') throw new Error(data.error ?? 'Could not start a session.');
-        const capSeconds: number = data.capSeconds ?? 360;
+        const capSeconds: number = data.capSeconds ?? 270;
         setCap(capSeconds);
         await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
 

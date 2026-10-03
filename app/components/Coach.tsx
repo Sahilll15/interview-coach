@@ -20,7 +20,7 @@ const CHIPS = [
   { text: 'One question at a time', cls: 'left-[2%] top-[18%]', delay: '0s' },
   { text: 'STAR, clarity, depth', cls: 'right-[0%] top-[10%]', delay: '1.2s' },
   { text: 'Quotes from your answers', cls: 'left-[6%] bottom-[8%]', delay: '2.1s' },
-  { text: '6 minute sessions', cls: 'right-[4%] bottom-[16%]', delay: '0.6s' },
+  { text: '4.5 minute sessions', cls: 'right-[4%] bottom-[16%]', delay: '0.6s' },
 ];
 
 function Nav({ onHome }: { onHome: () => void }) {
@@ -67,7 +67,7 @@ function Hero() {
         Practice the interview <em className="text-violet-deep">before</em> it counts
       </h1>
       <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-soft sm:text-lg">
-        Paste a job description and talk to an interviewer for six minutes. You get a report that scores every answer and quotes your own words back to you.
+        Paste a job description and talk to an interviewer for about four and a half minutes. You get a report that scores every answer and quotes your own words back to you.
       </p>
     </section>
   );

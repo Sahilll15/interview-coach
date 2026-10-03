@@ -8,7 +8,7 @@ A spoken mock interview in the browser that scores each answer and quotes your o
 
 ## Why it exists
 
-Most people prepare for interviews by rehearsing answers in their head, which hides the rambling and the missing results. Interview Coach lets you paste a job description (or pick a sample role), choose a level and an interview type, and talk to an AI interviewer for six minutes. You then get a report that scores every answer, quotes what you said, and gives you three practice questions aimed at your gaps. No mic? Text mode runs the same interviewer and the same report.
+Most people prepare for interviews by rehearsing answers in their head, which hides the rambling and the missing results. Interview Coach lets you paste a job description (or pick a sample role), choose a level and an interview type, and talk to an AI interviewer for about four and a half minutes. You then get a report that scores every answer, quotes what you said, and gives you three practice questions aimed at your gaps. No mic? Text mode runs the same interviewer and the same report.
 
 ## How it works
 
@@ -23,7 +23,7 @@ Most people prepare for interviews by rehearsing answers in their head, which hi
 What this does and does not cover:
 
 - Enforced on the server: the session config, one call per `/api/session` request, the hangup at cap plus 15 seconds, 400 output tokens per response, conversation truncation past 12k tokens, and the per IP and daily limits below.
-- Needs a Vercel plan that allows the session route's `maxDuration` of 420 seconds (Pro with Fluid compute). Hobby caps functions at 300 seconds, so there you would lower `maxDuration` to 300 and `SESSION_SECONDS` to 270 or less.
+- The session route's `maxDuration` is 300 seconds, the Vercel Hobby limit, so voice sessions are capped at 270 seconds (4.5 minutes) to leave room for the server-side hangup.
 - Best effort: if the instance holding the timer dies before it fires, the hangup is lost. Any later `/api/session` request on the same instance hangs up overdue calls, and otherwise the call runs until OpenAI's own session limit.
 
 **Report.** `POST /api/report` shapes the transcript (merge same speaker turns, clean whitespace, cap each turn and the total size), then calls the Responses API with Structured Outputs (`responses.parse` plus `zodTextFormat`). Per question it returns the question, a summary, STAR, clarity and depth scores with evidence quotes, and one improvement. Then the server checks the model's work:
@@ -98,7 +98,7 @@ npm run build && npm start
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime-mini` | Voice interviewer model |
 | `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Live transcription of your answers |
 | `OPENAI_VOICE` | `marin` | Interviewer voice |
-| `SESSION_SECONDS` | `360` | Voice session cap, clamped to 60 to 390 so the server hangup fits in `maxDuration` |
+| `SESSION_SECONDS` | `270` | Voice session cap, clamped to 60 to 270 so the server hangup fits in `maxDuration` |
 | `DAILY_SESSION_BUDGET` | `30` | Voice and text sessions per UTC day across the whole deployment, 503 after that |
 | `RATE_LIMIT_SESSIONS` | `3` | Sessions per IP per window |
 | `RATE_LIMIT_TURNS` | `40` | Text answers per IP per window |

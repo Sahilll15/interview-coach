@@ -25,7 +25,7 @@ export default function SetupPanel({ setup, onChange, mode, onMode, onStart, onS
         <h2 id="setup-title" className="font-serif text-3xl tracking-tight sm:text-4xl">
           Set up your interview
         </h2>
-        <p className="text-sm text-ink-faint">Takes about 6 minutes</p>
+        <p className="text-sm text-ink-faint">Takes about 5 minutes</p>
       </div>
 
       <div className="mt-6">
