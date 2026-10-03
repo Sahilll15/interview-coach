@@ -47,6 +47,19 @@ Rough numbers, check current pricing:
 
 Text mode costs a few cents at most.
 
+## Architecture
+
+![Interview Coach architecture: the browser sends its WebRTC offer through a Vercel route that checks limits in Upstash Redis and opens the OpenAI Realtime call, then audio flows directly between the browser and OpenAI while text turns and reports go through Vercel to the Responses API](docs/architecture.svg)
+
+1. The browser captures the mic, builds a WebRTC offer and posts it with the interview setup to `POST /api/session`.
+2. Every route checks its per IP limit in Upstash Redis before calling a model, and session starts also take one unit from the daily session budget.
+3. The session route opens the call with `realtime.calls.create` using the server key and the fixed session config, and returns only the SDP answer.
+4. Audio and the `oai-events` data channel then run over WebRTC between the browser and OpenAI Realtime, without passing through Vercel.
+5. The session route uses `after()` to hang the call up at the cap plus 15 seconds. This is best effort, because the pending hangups live in that one instance's memory.
+6. Text mode turns (`POST /api/interviewer`) and the report (`POST /api/report`) call the Responses API with Structured Outputs.
+
+**Why it is built this way.** The browser never holds an API key or client secret, so it cannot open extra sessions or change the session config. Limits are counted in Redis before any paid call, so they hold across instances, and report scores only count quotes the server found in the transcript.
+
 ## Screenshots
 
 ![Interview Coach home page with the animated orb, the headline "Practice the interview before it counts" and the start of the setup form](docs/home.webp)
