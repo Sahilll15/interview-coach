@@ -93,7 +93,9 @@ npm run build && npm start
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | none | Server only. Required. |
+| `OPENAI_API_KEY` | none | Server only. Required for voice, and the fallback for text when Groq fails |
+| `GROQ_API_KEY` | none | Server only. When set, the text interviewer and reports use Groq first |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model for the text interviewer and reports |
 | `OPENAI_MODEL` | `gpt-5.4-mini` | Report and text interviewer model |
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime-mini` | Voice interviewer model |
 | `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Live transcription of your answers |
