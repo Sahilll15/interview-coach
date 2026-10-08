@@ -3,7 +3,7 @@ import { scoreReport } from '../../lib/report.ts';
 import { parseSetup } from '../../lib/setup.ts';
 import { shapeTranscript, toPromptText } from '../../lib/transcript.ts';
 import { bad, readJson, upstreamError } from '../../server/http.ts';
-import { openai, TEXT_MODEL } from '../../server/openai.ts';
+import { textRoutes, withFallback } from '../../server/openai.ts';
 import { REPORT_INSTRUCTIONS } from '../../server/prompts.ts';
 import { check, tooMany } from '../../server/ratelimit.ts';
 import { ReportSchema, TranscriptIn } from '../../server/schemas.ts';
@@ -33,10 +33,11 @@ export async function POST(req: Request) {
   const { setup } = parsed;
   try {
     const started = Date.now();
-    const res = await openai().responses.parse({
-      model: TEXT_MODEL,
-      instructions: REPORT_INSTRUCTIONS,
-      input: `Role: ${setup.roleTitle} (${setup.level}, ${setup.type})
+    const { result: res, route } = await withFallback(textRoutes(), (client, { model }) =>
+      client.responses.parse({
+        model,
+        instructions: REPORT_INSTRUCTIONS,
+        input: `Role: ${setup.roleTitle} (${setup.level}, ${setup.type})
 
 <job_description>
 ${setup.jobDescription}
@@ -45,10 +46,11 @@ ${setup.jobDescription}
 <transcript>
 ${toPromptText(shaped.turns)}
 </transcript>`,
-      text: { format: zodTextFormat(ReportSchema, 'interview_report') },
-      reasoning: { effort: 'low' },
-      max_output_tokens: 8000,
-    });
+        text: { format: zodTextFormat(ReportSchema, 'interview_report') },
+        reasoning: { effort: 'low' },
+        max_output_tokens: 8000,
+      }),
+    );
 
     if (!res.output_parsed) return bad('The model did not return a report. Try again.', 502);
     const report = scoreReport(res.output_parsed, shaped.turns);
@@ -56,7 +58,7 @@ ${toPromptText(shaped.turns)}
     return Response.json({
       report,
       meta: {
-        model: TEXT_MODEL,
+        model: route.model,
         ms: Date.now() - started,
         inputTokens: res.usage?.input_tokens ?? null,
         outputTokens: res.usage?.output_tokens ?? null,

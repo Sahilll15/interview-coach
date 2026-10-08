@@ -2,7 +2,7 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import { parseSetup } from '../../lib/setup.ts';
 import { shapeTranscript, toPromptText } from '../../lib/transcript.ts';
 import { bad, readJson, upstreamError } from '../../server/http.ts';
-import { openai, TEXT_MAX_ANSWERS, TEXT_MODEL } from '../../server/openai.ts';
+import { TEXT_MAX_ANSWERS, textRoutes, withFallback } from '../../server/openai.ts';
 import { textInstructions } from '../../server/prompts.ts';
 import { budgetSpent, check, sessionBudget, tooMany } from '../../server/ratelimit.ts';
 import { NextTurnSchema, TranscriptIn } from '../../server/schemas.ts';
@@ -36,18 +36,20 @@ export async function POST(req: Request) {
 
   const isLast = answers >= TEXT_MAX_ANSWERS;
   try {
-    const res = await openai().responses.parse({
-      model: TEXT_MODEL,
-      instructions: textInstructions(parsed.setup, TEXT_MAX_ANSWERS),
-      input: shaped.turns.length
-        ? `<transcript>\n${toPromptText(shaped.turns)}\n</transcript>\n\n${
-            isLast ? 'The interview is over. Close it now.' : `Candidate answers so far: ${answers} of ${TEXT_MAX_ANSWERS}.`
-          }`
-        : 'The interview is starting. Greet the candidate in one sentence and ask your first question.',
-      text: { format: zodTextFormat(NextTurnSchema, 'next_turn') },
-      reasoning: { effort: 'low' },
-      max_output_tokens: 1500,
-    });
+    const { result: res } = await withFallback(textRoutes(), (client, { model }) =>
+      client.responses.parse({
+        model,
+        instructions: textInstructions(parsed.setup, TEXT_MAX_ANSWERS),
+        input: shaped.turns.length
+          ? `<transcript>\n${toPromptText(shaped.turns)}\n</transcript>\n\n${
+              isLast ? 'The interview is over. Close it now.' : `Candidate answers so far: ${answers} of ${TEXT_MAX_ANSWERS}.`
+            }`
+          : 'The interview is starting. Greet the candidate in one sentence and ask your first question.',
+        text: { format: zodTextFormat(NextTurnSchema, 'next_turn') },
+        reasoning: { effort: 'low' },
+        max_output_tokens: 1500,
+      }),
+    );
 
     const out = res.output_parsed;
     if (!out?.message.trim()) return bad('The interviewer did not reply. Try again.', 502);
