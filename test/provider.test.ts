@@ -20,8 +20,9 @@ test('textRoutes puts Groq first and keeps OpenAI as fallback only when its key 
   ]);
 });
 
-test('shouldFallBack covers 429, 5xx and network errors but not client errors', () => {
+test('shouldFallBack covers 429, 413, 5xx and network errors but not client errors', () => {
   assert.equal(shouldFallBack(apiError(429)), true);
+  assert.equal(shouldFallBack(apiError(413)), true);
   assert.equal(shouldFallBack(apiError(500)), true);
   assert.equal(shouldFallBack(apiError(503)), true);
   assert.equal(shouldFallBack(new OpenAI.APIConnectionError({ message: 'down' })), true);
