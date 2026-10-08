@@ -95,6 +95,7 @@ npm run build && npm start
 | --- | --- | --- |
 | `OPENAI_API_KEY` | none | Server only. Required for voice, and the fallback for text when Groq fails |
 | `GROQ_API_KEY` | none | Server only. When set, the text interviewer and reports use Groq first |
+| `GROQ_API_KEYS` | none | Server only. More Groq keys, comma or newline separated, tried in turn after `GROQ_API_KEY`. A rate-limited key rests until its retry-after and a rejected key rests for an hour. OpenAI is the fallback once every key has failed |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model for the text interviewer and reports |
 | `OPENAI_MODEL` | `gpt-5.4-mini` | Report and text interviewer model |
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime-mini` | Voice interviewer model |

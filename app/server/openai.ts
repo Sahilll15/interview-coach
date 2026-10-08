@@ -4,8 +4,9 @@ export type Provider = 'groq' | 'openai';
 export type Route = { provider: Provider; model: string };
 
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
+type Env = Record<string, string | undefined>;
 let client: OpenAI | null = null;
-let groqClient: OpenAI | null = null;
+const groqClients = new Map<string, OpenAI>();
 
 export function openai() {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set');
@@ -13,15 +14,22 @@ export function openai() {
   return client;
 }
 
-function groq() {
-  groqClient ??= new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: GROQ_BASE_URL, maxRetries: 1, timeout: 60_000 });
-  return groqClient;
+function groq(apiKey: string) {
+  let c = groqClients.get(apiKey);
+  if (!c) groqClients.set(apiKey, (c = new OpenAI({ apiKey, baseURL: GROQ_BASE_URL, maxRetries: 1, timeout: 60_000 })));
+  return c;
 }
 
-/** Text and structured calls: Groq when GROQ_API_KEY is set, with OpenAI as the fallback. */
-export function textRoutes(env: Record<string, string | undefined> = process.env): Route[] {
+/** GROQ_API_KEY first, then GROQ_API_KEYS (comma or newline separated), trimmed and without duplicates. */
+export function groqKeys(env: Env = process.env) {
+  const all = [env.GROQ_API_KEY ?? '', ...(env.GROQ_API_KEYS ?? '').split(/[,\n]/)].map((k) => k.trim());
+  return [...new Set(all.filter(Boolean))];
+}
+
+/** Text and structured calls: Groq when any Groq key is set, with OpenAI as the fallback. */
+export function textRoutes(env: Env = process.env): Route[] {
   const routes: Route[] = [];
-  if (env.GROQ_API_KEY) routes.push({ provider: 'groq', model: env.GROQ_MODEL || 'openai/gpt-oss-120b' });
+  if (groqKeys(env).length) routes.push({ provider: 'groq', model: env.GROQ_MODEL || 'openai/gpt-oss-120b' });
   if (env.OPENAI_API_KEY || !routes.length) routes.push({ provider: 'openai', model: env.OPENAI_MODEL ?? 'gpt-5.4-mini' });
   return routes;
 }
@@ -33,20 +41,58 @@ export function shouldFallBack(err: unknown) {
   return status === 429 || status === 413 || (typeof status === 'number' && status >= 500);
 }
 
+const HOUR = 3_600_000;
+const UNIT_MS: Record<string, number> = { h: HOUR, m: 60_000, s: 1000, ms: 1 };
+
+/** How long to rest a Groq key after this error: retry-after on 429/413 (kept between 1s and 1 day), an hour on 401/403, else 0. */
+export function cooldownMs(err: unknown) {
+  const e = err as { status?: number; headers?: Headers; message?: string } | null;
+  if (e?.status === 401 || e?.status === 403) return HOUR;
+  if (e?.status !== 429 && e?.status !== 413) return 0;
+  const header = Number(e.headers?.get?.('retry-after')) * 1000;
+  const wait = e.message?.match(/try again in ([\d.hms]+)/)?.[1] ?? '';
+  const parsed = [...wait.matchAll(/([\d.]+)(ms|h|m|s)/g)].reduce((t, [, n, unit]) => t + Number(n) * UNIT_MS[unit], 0);
+  const ms = header > 0 ? header : parsed;
+  return ms > 0 ? Math.min(Math.max(ms, 1000), 86_400_000) : 60_000;
+}
+
+const cooldowns = new Map<OpenAI, { until: number; status: number }>();
+const defaultClients = (p: Provider) => (p === 'groq' ? groqKeys().map(groq) : [openai()]);
+
+/** Tries Groq keys in order (next key on 429, 413, 401, 403), skipping keys on cooldown, then OpenAI once if the last Groq failure is worth it. */
 export async function withFallback<T>(
   routes: Route[],
   call: (client: OpenAI, route: Route) => Promise<T>,
-  clientFor: (provider: Provider) => OpenAI = (p) => (p === 'groq' ? groq() : openai()),
+  clientsFor: (provider: Provider) => OpenAI[] = defaultClients,
+  now: () => number = Date.now,
 ): Promise<{ result: T; route: Route }> {
-  for (const [i, route] of routes.entries()) {
-    try {
-      return { result: await call(clientFor(route.provider), route), route };
-    } catch (err) {
-      if (i === routes.length - 1 || !shouldFallBack(err)) throw err;
-      console.warn(`${route.provider} failed, falling back`, (err as { status?: number })?.status, (err as Error)?.message);
+  let last: unknown;
+  for (const route of routes) {
+    if (route.provider === 'openai' && last !== undefined) {
+      if (!shouldFallBack(last)) throw last;
+      console.warn('groq failed, falling back to openai', (last as { status?: number })?.status, (last as Error)?.message);
+    }
+    const clients = clientsFor(route.provider);
+    for (const [i, c] of clients.entries()) {
+      const resting = cooldowns.get(c);
+      if (resting && resting.until > now()) {
+        last = OpenAI.APIError.generate(resting.status, undefined, `groq key ${i + 1} of ${clients.length} is cooling down`, new Headers());
+        continue;
+      }
+      try {
+        return { result: await call(c, route), route };
+      } catch (err) {
+        if (route.provider !== 'groq' || !(shouldFallBack(err) || cooldownMs(err))) throw err;
+        last = err;
+        const wait = cooldownMs(err);
+        console.warn(`groq key ${i + 1} of ${clients.length} failed`, (err as { status?: number })?.status ?? 'network');
+        // A 5xx or network error is Groq itself, not this key, so the other keys are skipped.
+        if (!wait) break;
+        cooldowns.set(c, { until: now() + wait, status: (err as { status: number }).status });
+      }
     }
   }
-  throw new Error('No model provider is configured');
+  throw last ?? new Error('No model provider is configured');
 }
 export const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-mini';
 export const TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-transcribe';
